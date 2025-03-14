@@ -63,9 +63,9 @@ check_error "Échec de la mise à jour du système."
 
 # 2. Installation des dépendances et Cockpit
 display_message "Installation des packages nécessaires et Cockpit..."
-apt install -y openssh-server apache2 apache2-utils libapache2-mod-dav-fs \
+apt install -y openssh-server apache2 apache2-utils \
               rsync mdadm htop nano vim curl wget \
-              cockpit cockpit-file-sharing cockpit-packagekit cockpit-storaged \
+              cockpit cockpit-packagekit cockpit-storaged \
               fail2ban ufw certbot python3-certbot-apache
 check_error "Échec de l'installation des paquets."
 
