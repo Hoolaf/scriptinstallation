@@ -66,7 +66,7 @@ display_message "Installation des packages nécessaires et Cockpit..."
 apt install -y openssh-server apache2 apache2-utils \
               rsync mdadm htop nano vim curl wget \
               cockpit cockpit-packagekit cockpit-storaged \
-              fail2ban ufw certbot python3-certbot-apache
+              fail2ban ufw
 check_error "Échec de l'installation des paquets."
 
 # Activer et démarrer Cockpit
@@ -141,9 +141,9 @@ EOF
 systemctl restart ssh
 check_error "Échec de la configuration SSH."
 
-# 7. Configuration WebDAV avec HTTPS
-display_message "Configuration WebDAV avec HTTPS..."
-a2enmod dav dav_fs auth_digest ssl
+# 7. Configuration WebDAV en HTTP
+display_message "Configuration WebDAV..."
+a2enmod dav dav_fs auth_digest
 check_error "Échec de l'activation des modules Apache."
 
 # Créer la configuration WebDAV
@@ -168,13 +168,6 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
 </VirtualHost>
 EOF
 
-# Obtenir un certificat Let's Encrypt
-# Demander une adresse email valide pour le certificat
-read -p "Entrez une adresse email valide pour le certificat SSL : " SSL_EMAIL
-
-# Obtenir un certificat Let's Encrypt
-certbot --apache -d $(hostname) --non-interactive --agree-tos -m "$SSL_EMAIL"
-
 # Créer le fichier d'authentification WebDAV
 htdigest -c /etc/apache2/webdav.passwd "WebDAV Server" "$ADMIN_USER" << EOF
 $ADMIN_PASSWORD
@@ -193,7 +186,7 @@ check_error "Échec de la configuration WebDAV."
 # 8. Configuration du pare-feu
 display_message "Configuration du pare-feu..."
 ufw allow OpenSSH
-ufw allow 443/tcp
+ufw allow 80/tcp
 ufw allow 9090/tcp  # Port pour Cockpit
 ufw --force enable
 check_error "Échec de la configuration du pare-feu."
@@ -404,5 +397,5 @@ chmod +x /usr/local/bin/nas_backup.sh
 
 # 11. Finalisation
 display_message "Installation terminée avec succès !"
-display_message "Accédez à l'interface Cockpit : https://$(hostname):9090"
-display_message "Accédez à WebDAV : https://$(hostname)/webdav"
+display_message "Accédez à l'interface Cockpit : http://$(hostname):9090"
+display_message "Accédez à WebDAV : http://$(hostname)/webdav"
