@@ -111,8 +111,6 @@ chmod 2775 "$NAS_ROOT/Public"  # setgid pour conserver les droits de groupe
 chmod -R 770 "$NAS_ROOT/Users"
 check_error "Échec de la configuration des permissions."
 
-# 6. Configuration SSH (SFTP)
-# 6. Configuration SSH (SFTP)
 display_message "Configuration SSH pour SFTP..."
 cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
 
@@ -150,13 +148,9 @@ check_error "Échec de l'activation des modules Apache."
 
 # Créer la configuration WebDAV
 cat > /etc/apache2/sites-available/webdav.conf << EOF
-<VirtualHost *:443>
+<VirtualHost *:80>
     ServerAdmin webmaster@localhost
     DocumentRoot /var/www/html
-
-    SSLEngine on
-    SSLCertificateFile /etc/letsencrypt/live/$(hostname)/fullchain.pem
-    SSLCertificateKeyFile /etc/letsencrypt/live/$(hostname)/privkey.pem
 
     Alias /webdav /srv/nas
 
