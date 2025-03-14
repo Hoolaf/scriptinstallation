@@ -175,8 +175,11 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
 EOF
 
 # Obtenir un certificat Let's Encrypt
-certbot --apache -d $(hostname) --non-interactive --agree-tos -m admin@$(hostname)
-check_error "Échec de l'obtention du certificat SSL."
+# Demander une adresse email valide pour le certificat
+read -p "Entrez une adresse email valide pour le certificat SSL : " SSL_EMAIL
+
+# Obtenir un certificat Let's Encrypt
+certbot --apache -d $(hostname) --non-interactive --agree-tos -m "$SSL_EMAIL"
 
 # Créer le fichier d'authentification WebDAV
 htdigest -c /etc/apache2/webdav.passwd "WebDAV Server" "$ADMIN_USER" << EOF
