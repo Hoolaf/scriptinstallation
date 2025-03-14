@@ -426,3 +426,8 @@ EOF
 chmod +x /usr/local/bin/nas_backup.sh
 
 # 12. Finalisation
+display_message "Installation terminée avec succès !"
+display_message "Accédez à l'interface Cockpit : http://$(hostname):9090"
+display_message "Accédez à WebDAV : http://$(hostname)/webdav"
+display_message "Statut du RAID :"
+mdadm --detail /dev/md0 | grep -E 'State|Active|Working|Failed'
