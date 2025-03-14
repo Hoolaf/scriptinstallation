@@ -112,29 +112,34 @@ chmod -R 770 "$NAS_ROOT/Users"
 check_error "Échec de la configuration des permissions."
 
 # 6. Configuration SSH (SFTP)
+# 6. Configuration SSH (SFTP)
 display_message "Configuration SSH pour SFTP..."
 cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
 
-# Configuration SFTP avec chroot
+# Créer les dossiers utilisateurs pour SFTP (avec la bonne casse)
+mkdir -p "/srv/nas/Users"
+chown root:root "/srv/nas/Users"
+chmod 755 "/srv/nas/Users"
+
+for USER in "$ADMIN_USER" "$DEFAULT_USER"; do
+    mkdir -p "/srv/nas/Users/$USER"
+    chown root:root "/srv/nas/Users/$USER"
+    chmod 755 "/srv/nas/Users/$USER"
+    mkdir -p "/srv/nas/Users/$USER/files"
+    chown "$USER:nasusers" "/srv/nas/Users/$USER/files"
+    chmod 750 "/srv/nas/Users/$USER/files"
+done
+
+# Configuration SFTP avec chroot (noter la majuscule dans le chemin)
 cat > /etc/ssh/sshd_config.d/sftp.conf << EOF
 Subsystem sftp internal-sftp
 
 Match Group nasusers
-    ChrootDirectory /srv/nas/users/%u
+    ChrootDirectory /srv/nas/Users/%u
     ForceCommand internal-sftp
     X11Forwarding no
     AllowTcpForwarding no
 EOF
-
-# Créer les dossiers utilisateurs pour SFTP
-for USER in "$ADMIN_USER" "$DEFAULT_USER"; do
-    mkdir -p "/srv/nas/users/$USER"
-    chown root:root "/srv/nas/users/$USER"
-    chmod 755 "/srv/nas/users/$USER"
-    mkdir -p "/srv/nas/users/$USER/files"
-    chown "$USER:nasusers" "/srv/nas/users/$USER/files"
-    chmod 750 "/srv/nas/users/$USER/files"
-done
 
 systemctl restart ssh
 check_error "Échec de la configuration SSH."
