@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Script d'installation automatisée d'un NAS Debian
+# Ce script configure un serveur NAS complet sous Debian 12
+# avec RAID 5, SFTP, WebDAV, Cockpit, et gestion des utilisateurs
 
 # Vérification des privilèges root
 if [ "$(id -u)" -ne 0 ]; then
@@ -7,6 +10,7 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+# Couleurs pour les messages
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
@@ -40,8 +44,10 @@ NAS_ROOT="/srv/nas"
 ADMIN_USER="nasadmin"
 DEFAULT_USER="LaPlateforme"
 DEFAULT_PASSWORD="LaPlateforme13"
+RAID_LEVEL=5
+RAID_DEVICES=""
 
-# Demander le mot de passe admin (éviter les mots de passe en dur)
+# Demander le mot de passe admin
 read -sp "Entrez le mot de passe pour l'utilisateur $ADMIN_USER : " ADMIN_PASSWORD
 echo
 read -sp "Confirmez le mot de passe : " ADMIN_PASSWORD_CONFIRM
@@ -57,7 +63,52 @@ display_message "Mise à jour du système..."
 apt update && apt upgrade -y
 check_error "Échec de la mise à jour du système."
 
-# 2. Installation des dépendances et Cockpit
+# 2. Configuration du RAID
+configure_raid() {
+    display_message "Configuration du RAID ${RAID_LEVEL}..."
+    
+    lsblk
+    read -p "Listez les disques à utiliser pour le RAID (ex: /dev/sdb /dev/sdc) : " RAID_DEVICES
+    display_warning "ATTENTION: Toutes les données sur ces disques seront effacées!"
+
+    local count=$(echo $RAID_DEVICES | wc -w)
+    if [ $count -lt 3 ]; then
+        display_error "RAID 5 nécessite au moins 3 disques"
+        exit 1
+    fi
+
+    # Installation de mdadm
+    apt install -y mdadm
+    check_error "Échec de l'installation de mdadm."
+
+    for disk in $RAID_DEVICES; do
+        display_message "Partitionnement de $disk..."
+        parted -s $disk mklabel gpt
+        parted -s $disk mkpart primary 0% 100%
+        parted -s $disk set 1 raid on
+    done
+
+    display_message "Création du tableau RAID ${RAID_LEVEL}..."
+    mdadm --create --verbose /dev/md0 --level=$RAID_LEVEL --raid-devices=$count $RAID_DEVICES
+    check_error "Échec de la création du RAID"
+
+    mdadm --detail --scan >> /etc/mdadm/mdadm.conf
+    update-initramfs -u
+
+    display_message "Formatage du RAID en ext4..."
+    mkfs.ext4 /dev/md0
+    mkdir -p "$NAS_ROOT"
+    mount /dev/md0 "$NAS_ROOT"
+    echo "/dev/md0 $NAS_ROOT ext4 defaults 0 0" >> /etc/fstab
+
+    display_message "Vérification du statut RAID..."
+    mdadm --detail /dev/md0
+    cat /proc/mdstat
+}
+
+configure_raid
+
+# 3. Installation des dépendances et Cockpit
 display_message "Installation des packages nécessaires et Cockpit..."
 apt install -y openssh-server apache2 apache2-utils \
               rsync mdadm htop nano vim curl wget \
@@ -65,17 +116,16 @@ apt install -y openssh-server apache2 apache2-utils \
               fail2ban ufw
 check_error "Échec de l'installation des paquets."
 
-# Activer et démarrer Cockpit
 systemctl enable --now cockpit.socket
 check_error "Échec de l'activation de Cockpit."
 
-# 3. Configuration de la structure des dossiers
+# 4. Configuration de la structure des dossiers
 display_message "Configuration de la structure des dossiers..."
 mkdir -p "$NAS_ROOT/Public"
 mkdir -p "$NAS_ROOT/Users"
 check_error "Échec de la création des dossiers."
 
-# 4. Configuration des groupes et utilisateurs
+# 5. Configuration des groupes et utilisateurs
 display_message "Configuration des groupes et utilisateurs..."
 groupadd nasusers 2>/dev/null || true
 
@@ -99,7 +149,7 @@ else
     check_error "Échec de la création de l'utilisateur $DEFAULT_USER."
 fi
 
-# 5. Configuration des permissions
+# 6. Configuration des permissions
 display_message "Configuration des permissions..."
 chown -R root:nasusers "$NAS_ROOT"
 chmod -R 775 "$NAS_ROOT"
@@ -107,10 +157,10 @@ chmod 2775 "$NAS_ROOT/Public"  # setgid pour conserver les droits de groupe
 chmod -R 770 "$NAS_ROOT/Users"
 check_error "Échec de la configuration des permissions."
 
+# 7. Configuration SSH pour SFTP
 display_message "Configuration SSH pour SFTP..."
 cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
 
-# Créer les dossiers utilisateurs pour SFTP (avec la bonne casse)
 mkdir -p "/srv/nas/Users"
 chown root:root "/srv/nas/Users"
 chmod 755 "/srv/nas/Users"
@@ -124,9 +174,7 @@ for USER in "$ADMIN_USER" "$DEFAULT_USER"; do
     chmod 750 "/srv/nas/Users/$USER/files"
 done
 
-# Configuration SFTP avec chroot (noter la majuscule dans le chemin)
 cat > /etc/ssh/sshd_config.d/sftp.conf << EOF
-
 Match Group nasusers
     ChrootDirectory /srv/nas/Users/%u
     ForceCommand internal-sftp
@@ -137,12 +185,11 @@ EOF
 systemctl restart ssh
 check_error "Échec de la configuration SSH."
 
-# 7. Configuration WebDAV en HTTP
+# 8. Configuration WebDAV
 display_message "Configuration WebDAV..."
 a2enmod dav dav_fs auth_digest
 check_error "Échec de l'activation des modules Apache."
 
-# Créer la configuration WebDAV
 cat > /etc/apache2/sites-available/webdav.conf << EOF
 <VirtualHost *:80>
     ServerAdmin webmaster@localhost
@@ -164,7 +211,6 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
 </VirtualHost>
 EOF
 
-# Créer le fichier d'authentification WebDAV
 htdigest -c /etc/apache2/webdav.passwd "WebDAV Server" "$ADMIN_USER" << EOF
 $ADMIN_PASSWORD
 $ADMIN_PASSWORD
@@ -179,7 +225,7 @@ a2ensite webdav
 systemctl restart apache2
 check_error "Échec de la configuration WebDAV."
 
-# 8. Configuration du pare-feu
+# 9. Configuration du pare-feu
 display_message "Configuration du pare-feu..."
 ufw allow OpenSSH
 ufw allow 80/tcp
@@ -187,7 +233,7 @@ ufw allow 9090/tcp  # Port pour Cockpit
 ufw --force enable
 check_error "Échec de la configuration du pare-feu."
 
-# 9. Création du script de gestion des utilisateurs
+# 10. Création du script de gestion des utilisateurs
 display_message "Création du script de gestion des utilisateurs..."
 cat > /usr/local/bin/nas_user_manager.sh << 'EOF'
 #!/bin/bash
@@ -214,10 +260,8 @@ case "$ACTION" in
             exit 1
         fi
         
-        # Vérifier si l'utilisateur existe déjà
         if id "$USERNAME" &>/dev/null; then
             echo "L'utilisateur $USERNAME existe déjà."
-            # Ajouter au groupe nasusers s'il n'y est pas déjà
             if ! groups "$USERNAME" | grep -q nasusers; then
                 usermod -aG nasusers "$USERNAME"
                 echo "Utilisateur $USERNAME ajouté au groupe nasusers."
@@ -225,17 +269,12 @@ case "$ACTION" in
                 echo "L'utilisateur $USERNAME est déjà dans le groupe nasusers."
             fi
         else
-            # Créer l'utilisateur
             useradd -m -G nasusers -s /bin/bash "$USERNAME"
-            
-            # Définir le mot de passe
             echo "Définir le mot de passe pour $USERNAME:"
             passwd "$USERNAME"
-            
             echo "Utilisateur $USERNAME créé avec succès."
         fi
         
-        # Créer le dossier utilisateur dans le NAS s'il n'existe pas
         if [ ! -d "$NAS_ROOT/Users/$USERNAME" ]; then
             mkdir -p "$NAS_ROOT/Users/$USERNAME"
             chown "$USERNAME:nasusers" "$NAS_ROOT/Users/$USERNAME"
@@ -243,7 +282,6 @@ case "$ACTION" in
             echo "Dossier utilisateur créé: $NAS_ROOT/Users/$USERNAME"
         fi
         
-        # Ajouter l'utilisateur à WebDAV
         if [ -f "/etc/apache2/webdav.passwd" ]; then
             read -s -p "Entrez le mot de passe WebDAV pour $USERNAME: " WEBDAV_PASSWORD
             echo
@@ -263,22 +301,18 @@ case "$ACTION" in
             exit 1
         fi
         
-        # Vérifier si l'utilisateur existe
         if ! id "$USERNAME" &>/dev/null; then
             echo "L'utilisateur $USERNAME n'existe pas."
             exit 1
         fi
         
-        # Supprimer l'utilisateur
         userdel -r "$USERNAME"
         
-        # Sauvegarder les données de l'utilisateur
         if [ -d "$NAS_ROOT/Users/$USERNAME" ]; then
             mv "$NAS_ROOT/Users/$USERNAME" "$NAS_ROOT/Users/$USERNAME.bak_$(date +%Y%m%d)"
             echo "Données de l'utilisateur sauvegardées dans $NAS_ROOT/Users/$USERNAME.bak_$(date +%Y%m%d)"
         fi
         
-        # Supprimer l'utilisateur de WebDAV
         if [ -f "/etc/apache2/webdav.passwd" ]; then
             grep -v "$USERNAME:" /etc/apache2/webdav.passwd > /tmp/webdav.passwd.tmp
             mv /tmp/webdav.passwd.tmp /etc/apache2/webdav.passwd
@@ -337,7 +371,7 @@ EOF
 
 chmod +x /usr/local/bin/nas_user_manager.sh
 
-# 10. Création du script de sauvegarde
+# 11. Création du script de sauvegarde
 display_message "Création du script de sauvegarde..."
 cat > /usr/local/bin/nas_backup.sh << 'EOF'
 #!/bin/bash
@@ -391,7 +425,4 @@ EOF
 
 chmod +x /usr/local/bin/nas_backup.sh
 
-# 11. Finalisation
-display_message "Installation terminée avec succès !"
-display_message "Accédez à l'interface Cockpit : http://$(hostname):9090"
-display_message "Accédez à WebDAV : http://$(hostname)/webdav"
+# 12. Finalisation
