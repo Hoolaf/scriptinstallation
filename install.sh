@@ -132,7 +132,6 @@ done
 
 # Configuration SFTP avec chroot (noter la majuscule dans le chemin)
 cat > /etc/ssh/sshd_config.d/sftp.conf << EOF
-Subsystem sftp internal-sftp
 
 Match Group nasusers
     ChrootDirectory /srv/nas/Users/%u
