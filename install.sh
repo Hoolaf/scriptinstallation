@@ -1,15 +1,22 @@
 #!/bin/bash
 
+# Script d'installation automatisée d'un NAS Debian
+# Ce script configure un serveur NAS complet sous Debian 12
+# avec RAID 5, SFTP, WebDAV, Samba, Webmin et gestion des utilisateurs
+
+# Vérification des privilèges
 if [ "$(id -u)" -ne 0 ]; then
     echo "Ce script doit être exécuté en tant que root ou avec sudo."
     exit 1
 fi
 
+# Définition des couleurs
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 NC='\033[0m'
 
+# Fonctions d'affichage
 display_message() {
     echo -e "${GREEN}[INFO]${NC} $1"
 }
@@ -151,7 +158,6 @@ check_error "Échec de l'installation de Webmin."
 systemctl enable --now webmin
 
 # 8. Configuration WebDAV
-# Configuration WebDAV corrigée
 display_message "Configuration WebDAV..."
 a2enmod dav dav_fs auth_digest
 a2dissite 000-default.conf
