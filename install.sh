@@ -157,7 +157,7 @@ chmod -R 775 "$NAS_ROOT"
 chmod 2775 "$NAS_ROOT/Public"
 find "$NAS_ROOT/Public" -type d -exec chmod g+s {} \;
 # Permissions pour les dossiers utilisateurs
-chmod -R 700 "$NAS_ROOT/Users"/*
+chmod -R 700 "$NAS_ROOT/Users"
 check_error "Échec de la configuration des permissions."
 
 # 7. Configuration SSH pour SFTP
