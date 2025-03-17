@@ -189,8 +189,9 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
         Require valid-user
         
         # Restriction à l'utilisateur propriétaire
+        SetEnvIf Request_URI "^/webdav/Users/([^/]+)" WEBDAV_USER=$1
         <RequireAll>
-            Require user %{REMOTE_USER}
+            Require expr %{REMOTE_USER} == reqenv('WEBDAV_USER')
         </RequireAll>
     </Directory>
 
