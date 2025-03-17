@@ -184,29 +184,29 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
     </Directory>
 
     # Accès à l'espace personnel
-    AliasMatch ^/webdav/Users/([^/]+)(/?.*)$ "$NAS_ROOT/Users/\$1\$2"
-    <Directory "$NAS_ROOT/Users/*">
+    AliasMatch ^/webdav/Users/([^/]+)(/?.*)$ "$NAS_ROOT/Users/$1$2"
+    <LocationMatch "^/webdav/Users/([^/]+)">
         DAV On
         Options -Indexes +FollowSymLinks
         AuthType Digest
         AuthName "WebDAV_Area"
         AuthUserFile /etc/apache2/webdav.passwd
         
-        # Vérification du propriétaire
-        <RequireAll>
-            Require expr "%{REMOTE_USER} == '%{ENV:MATCH_USER}'"
-        </RequireAll>
+        # Extraire le nom d'utilisateur de l'URL
+        SetEnvIf Request_URI "^/webdav/Users/([^/]+)" MATCH_USER=$1
         
-        # Désactiver l'auto-ajout d'index.html
-        DirectorySlash Off
-        FallbackResource disabled
+        # Vérification que l'utilisateur n'accède qu'à son propre dossier
+        Require expr %{REMOTE_USER} == %{ENV:MATCH_USER}
+    </LocationMatch>
+
+    # Assurer que les permissions du système de fichiers sont correctes
+    <Directory "$NAS_ROOT/Users">
+        AllowOverride None
+        Require all denied
     </Directory>
 
-    # Extraction du nom d'utilisateur depuis l'URL
-    SetEnvIfNoCase Request_URI "^/webdav/Users/([^/]+)" MATCH_USER=\$1
-
-    ErrorLog \${APACHE_LOG_DIR}/webdav-error.log
-    CustomLog \${APACHE_LOG_DIR}/webdav-access.log combined
+    ErrorLog ${APACHE_LOG_DIR}/webdav-error.log
+    CustomLog ${APACHE_LOG_DIR}/webdav-access.log combined
 </VirtualHost>
 EOF
 
@@ -281,9 +281,12 @@ for USER in "$ADMIN_USER" "$DEFAULT_USER"; do
     USER_DIR="$NAS_ROOT/Users/$USER"
     mkdir -p "$USER_DIR"
     chown "$USER:nasusers" "$USER_DIR"
-    chmod 700 "$USER_DIR"
-    display_message "Espace créé pour $USER : $USER_DIR"
+    chmod 750 "$USER_DIR"  # Slightly more restrictive
 done
+
+find "$NAS_ROOT/Users" -type d -exec chmod 755 {} \;
+
+
 
 echo "Accès Public" > "$NAS_ROOT/Public/readme.txt"
 chown www-data:nasusers "$NAS_ROOT/Public/readme.txt"
