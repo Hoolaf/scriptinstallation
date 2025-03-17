@@ -184,39 +184,29 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
     </Directory>
 
     # Accès à l'espace personnel
-    Alias /webdav/Users "$NAS_ROOT/Users"
-    
-    <Directory "$NAS_ROOT/Users">
+    AliasMatch ^/webdav/Users/([^/]+)(/?.*)$ "$NAS_ROOT/Users/\$1\$2"
+    <Directory "$NAS_ROOT/Users/*">
         DAV On
         Options -Indexes +FollowSymLinks
         AuthType Digest
         AuthName "WebDAV_Area"
         AuthUserFile /etc/apache2/webdav.passwd
         
-        # Permettre l'accès à tous les utilisateurs authentifiés
-        Require valid-user
+        # Vérification du propriétaire
+        <RequireAll>
+            Require expr "%{REMOTE_USER} == '%{ENV:MATCH_USER}'"
+        </RequireAll>
         
-        # Règle spécifique pour chaque utilisateur
-        <If "%{REMOTE_USER} != ''">
-            <If "-d '$NAS_ROOT/Users/%{REMOTE_USER}'">
-                RewriteEngine on
-                RewriteCond %{REQUEST_URI} ^/webdav/Users/([^/]+)
-                RewriteCond %1 !=%{REMOTE_USER}
-                RewriteRule ^ - [F]
-            </If>
-        </If>
+        # Désactiver l'auto-ajout d'index.html
+        DirectorySlash Off
+        FallbackResource disabled
     </Directory>
 
-    # Protéger les dossiers users individuels
-    <DirectoryMatch "$NAS_ROOT/Users/([^/]+)">
-        Require expr %{REMOTE_USER} == basename(%{REQUEST_URI})
-    </DirectoryMatch>
+    # Extraction du nom d'utilisateur depuis l'URL
+    SetEnvIfNoCase Request_URI "^/webdav/Users/([^/]+)" MATCH_USER=\$1
 
-    ErrorLog ${APACHE_LOG_DIR}/webdav-error.log
-    CustomLog ${APACHE_LOG_DIR}/webdav-access.log combined
-    
-    # Augmenter le niveau de log pour débogage
-    LogLevel debug
+    ErrorLog \${APACHE_LOG_DIR}/webdav-error.log
+    CustomLog \${APACHE_LOG_DIR}/webdav-access.log combined
 </VirtualHost>
 EOF
 
@@ -254,8 +244,7 @@ cat > /etc/samba/smb.conf << EOF
     path = $NAS_ROOT/Public
     browseable = yes
     read only = no
-    guest ok = no  # Modification ici
-    valid users = @nasusers  # Ajout ici
+    guest ok = yes
     create mask = 0775
     directory mask = 0775
 
@@ -274,33 +263,7 @@ EOF
 (echo "$ADMIN_PASSWORD"; echo "$ADMIN_PASSWORD") | smbpasswd -a -s "$ADMIN_USER"
 
 systemctl restart smbd nmbd
-
-# Pour WebDAV, vérifier que l'authentification est bien activée
-# Vérifier que le fichier de mot de passe existe et est correct
-if [ ! -f /etc/apache2/webdav.passwd ]; then
-    echo "Fichier de mot de passe WebDAV manquant. Création..."
-    touch /etc/apache2/webdav.passwd
-    chown www-data:www-data /etc/apache2/webdav.passwd
-    chmod 640 /etc/apache2/webdav.passwd
-fi
-
-# Vérifier que les utilisateurs sont bien dans le fichier de mot de passe
-for USER in "$ADMIN_USER" "$DEFAULT_USER"; do
-    if ! grep -q "$USER" /etc/apache2/webdav.passwd; then
-        echo "Ajout de l'utilisateur $USER au fichier WebDAV..."
-        if [ "$USER" == "$ADMIN_USER" ]; then
-            htdigest /etc/apache2/webdav.passwd "WebDAV_Area" "$USER" << EOF
-$ADMIN_PASSWORD
-$ADMIN_PASSWORD
-EOF
-        else
-            htdigest /etc/apache2/webdav.passwd "WebDAV_Area" "$USER" << EOF
-$DEFAULT_PASSWORD
-$DEFAULT_PASSWORD
-EOF
-        fi
-    fi
-done
+check_error "Échec de la configuration Samba."
 
 # 10. Configuration du pare-feu
 display_message "Configuration du pare-feu..."
@@ -318,12 +281,9 @@ for USER in "$ADMIN_USER" "$DEFAULT_USER"; do
     USER_DIR="$NAS_ROOT/Users/$USER"
     mkdir -p "$USER_DIR"
     chown "$USER:nasusers" "$USER_DIR"
-    chmod 750 "$USER_DIR"  # Slightly more restrictive
+    chmod 700 "$USER_DIR"
+    display_message "Espace créé pour $USER : $USER_DIR"
 done
-
-find "$NAS_ROOT/Users" -type d -exec chmod 755 {} \;
-
-
 
 echo "Accès Public" > "$NAS_ROOT/Public/readme.txt"
 chown www-data:nasusers "$NAS_ROOT/Public/readme.txt"
