@@ -161,14 +161,27 @@ check_error "Échec de la configuration des permissions."
 display_message "Configuration SSH pour SFTP..."
 cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
 
+display_message "Configuration des permissions de l'arborescence SFTP..."
+mkdir -p "/srv/nas/Users"
+
+# Appliquer les permissions sur toute l'arborescence parente
+chown root:root /srv
+chmod 755 /srv
+chown root:root /srv/nas
+chmod 755 /srv/nas
+chown root:root "/srv/nas/Users"
+chmod 755 "/srv/nas/Users"
 mkdir -p "/srv/nas/Users"
 chown root:root "/srv/nas/Users"
 chmod 755 "/srv/nas/Users"
 
 for USER in "$ADMIN_USER" "$DEFAULT_USER"; do
+    display_message "Configuration du dossier pour $USER..."
     mkdir -p "/srv/nas/Users/$USER"
     chown root:root "/srv/nas/Users/$USER"
     chmod 755 "/srv/nas/Users/$USER"
+    
+    # Création du sous-dossier utilisateur
     mkdir -p "/srv/nas/Users/$USER/files"
     chown "$USER:nasusers" "/srv/nas/Users/$USER/files"
     chmod 750 "/srv/nas/Users/$USER/files"
