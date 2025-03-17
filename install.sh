@@ -162,6 +162,11 @@ display_message "Configuration WebDAV..."
 a2enmod dav dav_fs auth_digest
 a2dissite 000-default.conf
 
+# 8. Configuration WebDAV
+display_message "Configuration WebDAV..."
+a2enmod dav dav_fs auth_digest
+a2dissite 000-default.conf
+
 cat > /etc/apache2/sites-available/webdav.conf << EOF
 <VirtualHost *:80>
     ServerAdmin webmaster@localhost
@@ -171,7 +176,7 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
     Alias /webdav/Public "$NAS_ROOT/Public"
     <Directory "$NAS_ROOT/Public">
         DAV On
-        Options Indexes FollowSymLinks
+        Options -Indexes +FollowSymLinks
         AuthType Digest
         AuthName "WebDAV_Area"
         AuthUserFile /etc/apache2/webdav.passwd
@@ -179,25 +184,26 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
     </Directory>
 
     # Accès à l'espace personnel
-AliasMatch ^/webdav/Users/([^/]+)(/.*)?$ "$NAS_ROOT/Users/$1$2"
-<DirectoryMatch "^$NAS_ROOT/Users/([^/]+)">
-    DAV On
-    Options Indexes FollowSymLinks
-    AuthType Digest
-    AuthName "WebDAV_Area"
-    AuthUserFile /etc/apache2/webdav.passwd
-    Require valid-user
-    
-    # Extraction du nom d'utilisateur de l'URL
-    SetEnvIf Request_URI "^/webdav/Users/([^/]+)" WEBDAV_USER=$1
-    # Restriction à l'utilisateur propriétaire
-    <If "%{REMOTE_USER} == reqenv('WEBDAV_USER')">
-        Require valid-user
-    </If>
-    <Else>
-        Require all denied
-    </Else>
-</DirectoryMatch>
+    AliasMatch ^/webdav/Users/([^/]+)(/?.*)$ "$NAS_ROOT/Users/\$1\$2"
+    <Directory "$NAS_ROOT/Users/*">
+        DAV On
+        Options -Indexes +FollowSymLinks
+        AuthType Digest
+        AuthName "WebDAV_Area"
+        AuthUserFile /etc/apache2/webdav.passwd
+        
+        # Vérification du propriétaire
+        <RequireAll>
+            Require expr "%{REMOTE_USER} == '%{ENV:MATCH_USER}'"
+        </RequireAll>
+        
+        # Désactiver l'auto-ajout d'index.html
+        DirectorySlash Off
+        FallbackResource disabled
+    </Directory>
+
+    # Extraction du nom d'utilisateur depuis l'URL
+    SetEnvIfNoCase Request_URI "^/webdav/Users/([^/]+)" MATCH_USER=\$1
 
     ErrorLog \${APACHE_LOG_DIR}/webdav-error.log
     CustomLog \${APACHE_LOG_DIR}/webdav-access.log combined
@@ -278,6 +284,13 @@ for USER in "$ADMIN_USER" "$DEFAULT_USER"; do
     chmod 700 "$USER_DIR"
     display_message "Espace créé pour $USER : $USER_DIR"
 done
+
+echo "Accès Public" > "$NAS_ROOT/Public/readme.txt"
+chown www-data:nasusers "$NAS_ROOT/Public/readme.txt"
+
+USER_DIR="$NAS_ROOT/Users/$DEFAULT_USER"
+echo "Espace de $DEFAULT_USER" > "$USER_DIR/welcome.txt"
+chown $DEFAULT_USER:nasusers "$USER_DIR/welcome.txt"
 
 # 12. Finalisation
 display_message "Installation terminée avec succès !"
