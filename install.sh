@@ -241,9 +241,8 @@ ufw allow 10000/tcp  # Webmin
 ufw --force enable
 check_error "Échec de la configuration du pare-feu."
 
-# ... [Les sections de gestion des utilisateurs et sauvegarde restent inchangées] ...
 
-# 12. Finalisation
+# 12. Finish Help 
 display_message "Installation terminée avec succès !"
 display_message "Accédez à l'interface Webmin : https://$(hostname):10000"
 display_message "Accédez à WebDAV : http://$(hostname)/webdav"
