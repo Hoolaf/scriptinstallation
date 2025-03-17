@@ -153,8 +153,11 @@ fi
 display_message "Configuration des permissions..."
 chown -R root:nasusers "$NAS_ROOT"
 chmod -R 775 "$NAS_ROOT"
-chmod 2775 "$NAS_ROOT/Public"  # setgid pour conserver les droits de groupe
-chmod -R 770 "$NAS_ROOT/Users"
+# Setgid pour conserver les droits de groupe dans Public
+chmod 2775 "$NAS_ROOT/Public"
+find "$NAS_ROOT/Public" -type d -exec chmod g+s {} \;
+# Permissions pour les dossiers utilisateurs
+chmod -R 700 "$NAS_ROOT/Users"/*
 check_error "Échec de la configuration des permissions."
 
 # 7. Configuration SSH pour SFTP
@@ -183,8 +186,8 @@ for USER in "$ADMIN_USER" "$DEFAULT_USER"; do
     
     # Création du sous-dossier utilisateur
     mkdir -p "/srv/nas/Users/$USER/files"
-    chown "$USER:nasusers" "/srv/nas/Users/$USER/files"
-    chmod 750 "/srv/nas/Users/$USER/files"
+    chown "$USER:$USER" "/srv/nas/Users/$USER/files"
+    chmod 700 "/srv/nas/Users/$USER/files"
 done
 
 cat > /etc/ssh/sshd_config.d/sftp.conf << EOF
