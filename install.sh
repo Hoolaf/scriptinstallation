@@ -4,19 +4,18 @@
 # Ce script configure un serveur NAS complet sous Debian 12
 # avec RAID 5, SFTP, WebDAV, Cockpit, et gestion des utilisateurs
 
-# Vérification des privilèges root
+#Privileges Checking
 if [ "$(id -u)" -ne 0 ]; then
     echo "Ce script doit être exécuté en tant que root ou avec sudo."
     exit 1
 fi
 
-# Couleurs pour les messages
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Fonctions pour afficher les messages
+# Fonction Affichage de messages
 display_message() {
     echo -e "${GREEN}[INFO]${NC} $1"
 }
@@ -29,7 +28,6 @@ display_warning() {
     echo -e "${YELLOW}[ATTENTION]${NC} $1"
 }
 
-# Fonction pour vérifier les erreurs
 check_error() {
     if [ $? -ne 0 ]; then
         display_error "$1"
@@ -39,7 +37,7 @@ check_error() {
 
 display_message "Début de l'installation du serveur NAS Debian..."
 
-# Variables de configuration
+# Variable de configuration
 NAS_ROOT="/srv/nas"
 ADMIN_USER="nasadmin"
 DEFAULT_USER="LaPlateforme"
@@ -47,7 +45,6 @@ DEFAULT_PASSWORD="LaPlateforme13"
 RAID_LEVEL=5
 RAID_DEVICES=""
 
-# Demander le mot de passe admin
 read -sp "Entrez le mot de passe pour l'utilisateur $ADMIN_USER : " ADMIN_PASSWORD
 echo
 read -sp "Confirmez le mot de passe : " ADMIN_PASSWORD_CONFIRM
@@ -58,12 +55,10 @@ if [ "$ADMIN_PASSWORD" != "$ADMIN_PASSWORD_CONFIRM" ]; then
     exit 1
 fi
 
-# 1. Mise à jour du système
 display_message "Mise à jour du système..."
 apt update && apt upgrade -y
 check_error "Échec de la mise à jour du système."
 
-# 2. Configuration du RAID
 configure_raid() {
     display_message "Configuration du RAID ${RAID_LEVEL}..."
     
@@ -108,16 +103,9 @@ configure_raid() {
 
 configure_raid
 
-# 3. Installation des dépendances et Cockpit
+# 3. Installatio des dépendances
 #!/bin/bash
 
-# Script d'installation automatisée d'un NAS Debian
-# Ce script configure un serveur NAS complet sous Debian 12
-# avec RAID 5, SFTP, WebDAV, Webmin, Samba et gestion des utilisateurs
-
-# ... [Le début du script jusqu'à la section 3 reste inchangé] ...
-
-# 3. Installation des dépendances et Webmin (remplacement de Cockpit)
 display_message "Installation des packages nécessaires et Webmin..."
 apt install -y openssh-server apache2 apache2-utils \
               rsync mdadm htop nano vim curl wget \
@@ -135,15 +123,11 @@ check_error "Échec de l'installation de Webmin."
 systemctl enable --now webmin
 check_error "Échec de l'activation de Webmin."
 
-# ... [Les sections 4 à 7 restent inchangées jusqu'à la configuration WebDAV] ...
 
-# 8. Correction de la configuration WebDAV
-# 8. Configuration WebDAV
 display_message "Configuration WebDAV..."
 a2enmod dav dav_fs auth_digest
 check_error "Échec de l'activation des modules Apache."
 
-# Désactiver le site par défaut
 a2dissite 000-default.conf
 
 cat > /etc/apache2/sites-available/webdav.conf << EOF
@@ -158,11 +142,6 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
         AuthUserFile /etc/apache2/webdav.passwd
         Require valid-user
         
-        # Configuration supplémentaire
-        Options Indexes FollowSymLinks
-        DavMinTimeout 600
-        CreateMask 0775
-        DirectoryMask 0775
         
         # Autorisations
         <LimitExcept GET HEAD OPTIONS>
