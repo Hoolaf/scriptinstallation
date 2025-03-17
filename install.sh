@@ -167,7 +167,20 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
     ServerAdmin webmaster@localhost
     DocumentRoot $NAS_ROOT
 
-    <Directory $NAS_ROOT>
+    # Accès au dossier Public
+    Alias /webdav/Public "$NAS_ROOT/Public"
+    <Directory "$NAS_ROOT/Public">
+        DAV On
+        Options Indexes FollowSymLinks
+        AuthType Digest
+        AuthName "WebDAV_Area"
+        AuthUserFile /etc/apache2/webdav.passwd
+        Require valid-user
+    </Directory>
+
+    # Accès à l'espace personnel
+    AliasMatch ^/webdav/Users/([^/]+) "$NAS_ROOT/Users/\$1"
+    <Directory "$NAS_ROOT/Users/*">
         DAV On
         Options Indexes FollowSymLinks
         AuthType Digest
@@ -175,9 +188,10 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
         AuthUserFile /etc/apache2/webdav.passwd
         Require valid-user
         
-        <LimitExcept GET HEAD OPTIONS>
-            Require valid-user
-        </LimitExcept>
+        # Restriction à l'utilisateur propriétaire
+        <RequireAll>
+            Require user %{LA-U:REMOTE_USER}
+        </RequireAll>
     </Directory>
 
     ErrorLog \${APACHE_LOG_DIR}/webdav-error.log
@@ -185,11 +199,12 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
 </VirtualHost>
 EOF
 
-# Création du fichier d'authentification
+# Créer le fichier de mot de passe si inexistant
 [ ! -f /etc/apache2/webdav.passwd ] && touch /etc/apache2/webdav.passwd
 chown www-data:www-data /etc/apache2/webdav.passwd
 chmod 640 /etc/apache2/webdav.passwd
 
+# Ajouter les utilisateurs
 htdigest -c /etc/apache2/webdav.passwd "WebDAV_Area" "$ADMIN_USER" << EOF
 $ADMIN_PASSWORD
 $ADMIN_PASSWORD
