@@ -158,6 +158,7 @@ check_error "Échec de l'installation de Webmin."
 systemctl enable --now webmin
 
 # 8. Configuration WebDAV
+# Configuration WebDAV corrigée
 display_message "Configuration WebDAV..."
 a2enmod dav dav_fs auth_digest
 a2dissite 000-default.conf
@@ -190,7 +191,7 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
         
         # Restriction à l'utilisateur propriétaire
         <RequireAll>
-            Require user %{LA-U:REMOTE_USER}
+            Require user %{REMOTE_USER}
         </RequireAll>
     </Directory>
 
