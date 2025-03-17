@@ -179,7 +179,7 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
     </Directory>
 
     # Accès à l'espace personnel
-    AliasMatch ^/webdav/Users/([^/]+)/?(.*) "$NAS_ROOT/Users/\$1/\$2"
+    AliasMatch ^/webdav/Users/([^/]+)(/.*)?$ "$NAS_ROOT/Users/\$1\$2"
     <Directory "$NAS_ROOT/Users/*">
         DAV On
         Options Indexes FollowSymLinks
