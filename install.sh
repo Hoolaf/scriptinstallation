@@ -179,20 +179,25 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
     </Directory>
 
     # Accès à l'espace personnel
-    AliasMatch ^/webdav/Users/([^/]+)(/.*)?$ "$NAS_ROOT/Users/\$1\$2"
-    <Directory "$NAS_ROOT/Users/*">
-        DAV On
-        Options Indexes FollowSymLinks
-        AuthType Digest
-        AuthName "WebDAV_Area"
-        AuthUserFile /etc/apache2/webdav.passwd
+AliasMatch ^/webdav/Users/([^/]+)(/.*)?$ "$NAS_ROOT/Users/$1$2"
+<DirectoryMatch "^$NAS_ROOT/Users/([^/]+)">
+    DAV On
+    Options Indexes FollowSymLinks
+    AuthType Digest
+    AuthName "WebDAV_Area"
+    AuthUserFile /etc/apache2/webdav.passwd
+    Require valid-user
+    
+    # Extraction du nom d'utilisateur de l'URL
+    SetEnvIf Request_URI "^/webdav/Users/([^/]+)" WEBDAV_USER=$1
+    # Restriction à l'utilisateur propriétaire
+    <If "%{REMOTE_USER} == reqenv('WEBDAV_USER')">
         Require valid-user
-        
-        # Restriction à l'utilisateur propriétaire
-        <RequireAll>
-            Require user %{REMOTE_USER}
-        </RequireAll>
-    </Directory>
+    </If>
+    <Else>
+        Require all denied
+    </Else>
+</DirectoryMatch>
 
     ErrorLog \${APACHE_LOG_DIR}/webdav-error.log
     CustomLog \${APACHE_LOG_DIR}/webdav-access.log combined
