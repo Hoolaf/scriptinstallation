@@ -179,7 +179,7 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
     </Directory>
 
     # Accès à l'espace personnel
-    AliasMatch ^/webdav/Users/([^/]+) "$NAS_ROOT/Users/\$1"
+    AliasMatch ^/webdav/Users/([^/]+)/?(.*) "$NAS_ROOT/Users/\$1/\$2"
     <Directory "$NAS_ROOT/Users/*">
         DAV On
         Options Indexes FollowSymLinks
@@ -189,9 +189,8 @@ cat > /etc/apache2/sites-available/webdav.conf << EOF
         Require valid-user
         
         # Restriction à l'utilisateur propriétaire
-        SetEnvIf Request_URI "^/webdav/Users/([^/]+)" WEBDAV_USER=$1
         <RequireAll>
-            Require expr %{REMOTE_USER} == reqenv('WEBDAV_USER')
+            Require user %{REMOTE_USER}
         </RequireAll>
     </Directory>
 
