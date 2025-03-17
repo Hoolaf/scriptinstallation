@@ -138,33 +138,62 @@ check_error "Échec de l'activation de Webmin."
 # ... [Les sections 4 à 7 restent inchangées jusqu'à la configuration WebDAV] ...
 
 # 8. Correction de la configuration WebDAV
+# 8. Configuration WebDAV
 display_message "Configuration WebDAV..."
 a2enmod dav dav_fs auth_digest
 check_error "Échec de l'activation des modules Apache."
 
+# Désactiver le site par défaut
+a2dissite 000-default.conf
+
 cat > /etc/apache2/sites-available/webdav.conf << EOF
 <VirtualHost *:80>
     ServerAdmin webmaster@localhost
-    DocumentRoot /var/www/html
-
-    Alias /webdav /srv/nas
+    DocumentRoot /srv/nas
 
     <Directory /srv/nas>
         DAV On
         AuthType Digest
-        AuthName "WebDAV_Server"
+        AuthName "WebDAV_Area"
         AuthUserFile /etc/apache2/webdav.passwd
         Require valid-user
         
-        # Configuration supplémentaire pour le bon fonctionnement
-        DirectoryIndex disabled
+        # Configuration supplémentaire
         Options Indexes FollowSymLinks
-        AllowOverride None
-        AuthDigestProvider file
-        Require all granted
+        DavMinTimeout 600
+        CreateMask 0775
+        DirectoryMask 0775
+        
+        # Autorisations
+        <LimitExcept GET HEAD OPTIONS>
+            Require valid-user
+        </LimitExcept>
     </Directory>
+    
+    ErrorLog \${APACHE_LOG_DIR}/webdav-error.log
+    CustomLog \${APACHE_LOG_DIR}/webdav-access.log combined
 </VirtualHost>
 EOF
+
+# Créer le fichier de mot de passe si inexistant
+[ ! -f /etc/apache2/webdav.passwd ] && touch /etc/apache2/webdav.passwd
+chown www-data:www-data /etc/apache2/webdav.passwd
+chmod 640 /etc/apache2/webdav.passwd
+
+# Ajouter les utilisateurs
+htdigest -c /etc/apache2/webdav.passwd "WebDAV_Area" "$ADMIN_USER" << EOF
+$ADMIN_PASSWORD
+$ADMIN_PASSWORD
+EOF
+
+htdigest /etc/apache2/webdav.passwd "WebDAV_Area" "$DEFAULT_USER" << EOF
+$DEFAULT_PASSWORD
+$DEFAULT_PASSWORD
+EOF
+
+a2ensite webdav.conf
+systemctl restart apache2
+check_error "Échec de la configuration WebDAV."
 
 # Création du fichier de mots de passe s'il n'existe pas
 if [ ! -f /etc/apache2/webdav.passwd ]; then
